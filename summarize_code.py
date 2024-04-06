@@ -85,10 +85,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze a git repository using langchain and chatgpt.")
-    parser.add_argument("--local-repo-path", type=str, required=True, help="Path to the local repository.")
+    parser.add_argument("local_repo_path", type=str, help="Path to the local repository.")
     parser.add_argument("--remote-repo-url", type=str, help="URL of the remote repository to clone (optional).")
     parser.add_argument("--openai-model-name", type=str, default="gpt-3.5-turbo", help="Name of the OpenAI ChatGPT model to use.")
-    parser.add_argument("--user-question", type=str, required=True, help="User input question to analyze the repository.")
+    parser.add_argument("--user-question", type=str, default="Please summarize the project for me.", help="User input question to analyze the repository.")
     parser.add_argument("--load-from-existing-db", action="store_true", help="Load from an existing database instead of creating from raw text.")
     parser.add_argument("--db-persist-path", type=str, default="./db", help="Path to persist the Chroma database.")
     parser.add_argument("--parser-threshold", type=int, default=500, help="Parser threshold for the LanguageParser.")
