@@ -25,19 +25,29 @@ from langchain.chains import create_history_aware_retriever, create_retrieval_ch
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 import dotenv
 dotenv.load_dotenv()
 
 def main(args):
-    if args.remote_repo_url:
-        repo = Repo.clone_from(args.remote_repo_url, to_path=args.local_repo_path)
+    if args.service == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+        embedding = GoogleGenerativeAIEmbeddings(model=args.gemini_embedding_model)
+        llm = ChatGoogleGenerativeAI(model=args.gemini_model, convert_system_message_to_human=True)
     else:
-        repo = Repo(args.local_repo_path)
+        assert args.service == "openai"
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+        embedding = OpenAIEmbeddings(model=args.openai_embedding_model)
+        llm = ChatOpenAI(model_name=args.openai_model)
 
-    if not args.load_from_existing_db:
-        if os.path.exists(args.db_persist_path):
-            print(f"Error: Local persistent database already exists at {args.db_persist_path}. Please use --load-from-existing-db or specify a different path.")
+    if args.remote_repo_url:
+        assert args.local_repo_path
+        Repo.clone_from(args.remote_repo_url, to_path=args.local_repo_path)
+
+    if args.local_repo_path:
+        if os.path.exists(args.db):
+            print(f"Error: Local persistent database already exists at {args.db}. Please use --load-from-existing-db or specify a different path.")
             return
 
         loader = GenericLoader.from_filesystem(
@@ -54,16 +64,14 @@ def main(args):
         )
         texts = python_splitter.split_documents(documents)
 
-        db = Chroma.from_documents(texts, OpenAIEmbeddings(disallowed_special=()), persist_directory=args.db_persist_path)
+        db = Chroma.from_documents(texts, embedding, persist_directory=args.db)
     else:
-        db = Chroma(persist_directory=args.db_persist_path, embedding_function=OpenAIEmbeddings(disallowed_special=()))
+        db = Chroma(persist_directory=args.db, embedding_function=embedding)
 
     retriever = db.as_retriever(
         search_type="mmr",  # Also test "similarity"
         search_kwargs={"k": 8},
     )
-
-    llm = ChatOpenAI(model_name=args.openai_model_name)
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -91,20 +99,28 @@ def main(args):
     document_chain = create_stuff_documents_chain(llm, prompt)
 
     qa = create_retrieval_chain(retriever_chain, document_chain)
-    result = qa.invoke({"input": args.user_question})
+    result = qa.invoke({"input": args.prompt})
     print(result["answer"])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze a git repository using langchain and chatgpt.")
-    parser.add_argument("local_repo_path", type=str, help="Path to the local repository.")
+    parser.add_argument("--local-repo-path", type=str, help="Path to the local repository.")
     parser.add_argument("--remote-repo-url", type=str, help="URL of the remote repository to clone (optional).")
-    parser.add_argument("--openai-model-name", type=str, default="gpt-3.5-turbo", help="Name of the OpenAI ChatGPT model to use.")
-    parser.add_argument("--user-question", type=str, default="Please summarize the project for me.", help="User input question to analyze the repository.")
-    parser.add_argument("--load-from-existing-db", action="store_true", help="Load from an existing database instead of creating from raw text.")
-    parser.add_argument("--db-persist-path", type=str, default="./db", help="Path to persist the Chroma database.")
-    parser.add_argument("--parser-threshold", type=int, default=500, help="Parser threshold for the LanguageParser.")
+    parser.add_argument("--prompt", type=str, default="Please summarize the project for me.", help="User input question to analyze the repository.")
+    parser.add_argument("--db", type=str, default="./db", help="Path to persist the Chroma database.")
+    parser.add_argument("--parser-threshold", type=int, default=0, help="Parser threshold for the LanguageParser.")
     parser.add_argument("--chunk-size", type=int, default=2000, help="Chunk size for the RecursiveCharacterTextSplitter.")
     parser.add_argument("--chunk-overlap", type=int, default=200, help="Chunk overlap for the RecursiveCharacterTextSplitter.")
+
+    gemini = parser.add_argument_group("Gemini options")
+    gemini.add_argument("--gemini-model", type=str, default="gemini-pro", help="Name of the chat model to use.")
+    gemini.add_argument("--gemini-embedding-model", type=str, default="models/embedding-001", help="Name of the embedding model to use.")
+
+    openai = parser.add_argument_group("OpenAI options")
+    openai.add_argument("--openai-model", type=str, default="gpt-3.5-turbo", help="Name of the chat model to use.")
+    openai.add_argument("--openai-embedding-model", type=str, default="text-embedding-3-small", help="Name of the embedding model to use.")
+
+    parser.add_argument('--service', choices=['gemini', 'openai'], default='gemini', help="Service to use for embedding and chat.")
 
     args = parser.parse_args()
     main(args)
