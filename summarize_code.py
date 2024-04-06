@@ -1,5 +1,16 @@
 # Reference: https://python.langchain.com/docs/use_cases/code_understanding/
-# Revised by Claude3 Opus
+# Revised by Claude3 Opus according to the following prompts:
+# I have a python program that uses langchain to create a vector database for a git repository and then uses chatgpt to query and analyze its content. 
+# I'd like to make the following updates:
+# 
+# 1. Allow a mode that only providing an already existing local repo path.
+# 2. Allow a mode that loads from an existing db without the need of creating from raw text (with Chroma.from_documents) on the fly.
+# 3. When the chroma db is created on the fly, please allow the user to specify a path to persist it.
+# 4. Please use command line option style: "--abc-def" instead of "--abc_def".
+# 5. When not loading from an existing db while the local persistent db exists, issue error, do nothing and exit.
+# 6. Allow configuration for parser_threshold, chunk_size, chunk_overlap. Leave the default to what currently provided.
+# 7. Make the "local repo path" a positional arg.
+# Here is the python program:
 
 import argparse
 import os
